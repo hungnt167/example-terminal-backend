@@ -113,8 +113,9 @@ post '/create_payment_intent' do
 
   begin
     payment_intent = Stripe::PaymentIntent.create(
-      :payment_method_types => ['card_present'],
+      :payment_method_types => ['card_present', 'card'],
       :capture_method => 'manual',
+      :confirmation_method => 'manual',
       :amount => params[:amount],
       :currency => params[:currency] || 'usd',
       :description => params[:description] || 'Example PaymentIntent',
@@ -126,7 +127,77 @@ post '/create_payment_intent' do
 
   log_info("PaymentIntent successfully created: #{payment_intent.id}")
   status 200
-  return {:intent => payment_intent.id, :secret => payment_intent.client_secret}.to_json
+  return {:intent => payment_intent.id, :paymentIntent => payment_intent, :secret => payment_intent.client_secret}.to_json
+end
+
+# This endpoint get PaymentIntent List.
+# https://stripe.com/docs/terminal/payments#capture
+get '/get_pending_payment_intent_list' do
+  begin
+    result = Stripe::PaymentIntent.list()
+  rescue Stripe::StripeError => e
+    status 402
+    return log_info("Error listing PaymentIntent! #{e.message}")
+  end
+
+  # Optionally reconcile the PaymentIntent with your internal order system.
+  status 200
+  return {:items => result.data}.to_json
+end
+
+# This endpoint update a PaymentIntent.
+post '/update_payment_intent' do
+  begin
+    id = params["payment_intent_id"]
+    payment_intent = Stripe::PaymentIntent.update(id,
+    {
+      amount: params[:amount] || 50,
+    })
+  rescue Stripe::StripeError => e
+    status 402
+    return log_info("Error updating PaymentIntent! #{e.message}")
+  end
+
+  log_info("PaymentIntent successfully updated: #{id}")
+  # Optionally reconcile the PaymentIntent with your internal order system.
+  status 200
+  return {:paymentIntent => payment_intent, :secret => payment_intent.client_secret}.to_json
+end
+
+# This endpoint cancel a PaymentIntent.
+post '/cancel_payment_intent' do
+  begin
+    id = params["payment_intent_id"]
+    payment_intent = Stripe::PaymentIntent.cancel(id)
+  rescue Stripe::StripeError => e
+    status 402
+    return log_info("Error cancelling PaymentIntent! #{e.message}")
+  end
+
+  log_info("PaymentIntent successfully cancelled: #{id}")
+  # Optionally reconcile the PaymentIntent with your internal order system.
+  status 200
+  return {:paymentIntent => payment_intent, :secret => payment_intent.client_secret}.to_json
+end
+
+# This endpoint confirm a PaymentIntent.
+# https://stripe.com/docs/terminal/payments#capture
+post '/confirm_payment_intent' do
+  begin
+    id = params["payment_intent_id"]
+    payment_intent = Stripe::PaymentIntent.confirm(id,
+    {
+      payment_method: params[:payment_method] ||'pm_card_visa',
+    })
+  rescue Stripe::StripeError => e
+    status 402
+    return log_info("Error confirming PaymentIntent! #{e.message}")
+  end
+
+  log_info("PaymentIntent successfully confirmed: #{id}")
+  # Optionally reconcile the PaymentIntent with your internal order system.
+  status 200
+  return {:paymentIntent => payment_intent, :secret => payment_intent.client_secret}.to_json
 end
 
 # This endpoint captures a PaymentIntent.
@@ -143,7 +214,7 @@ post '/capture_payment_intent' do
   log_info("PaymentIntent successfully captured: #{id}")
   # Optionally reconcile the PaymentIntent with your internal order system.
   status 200
-  return {:intent => payment_intent.id, :secret => payment_intent.client_secret}.to_json
+  return {:intent => payment_intent.id, :paymentIntent => payment_intent, :secret => payment_intent.client_secret}.to_json
 end
 
 # Looks up or creates a Customer on your stripe account
