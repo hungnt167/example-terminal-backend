@@ -102,6 +102,25 @@ post '/connection_token' do
   return {:secret => token.secret}.to_json
 end
 
+# This endpoint get customer List.
+get '/get_customer_list' do
+  begin
+    result = Stripe::Customer.list()
+    customers = result.data
+    for customer in customers do
+     paymentMethodList = Stripe::PaymentMethod.list(customer: customer.id, type: "card")
+     customer.payment_methods = paymentMethodList.data
+    end
+  rescue Stripe::StripeError => e
+    status 402
+    return log_info("Error listing customer! #{e.message}")
+  end
+
+  # Optionally reconcile the customer with your internal order system.
+  status 200
+  return {:items => customers}.to_json
+end
+
 # This endpoint creates a PaymentIntent.
 # https://stripe.com/docs/terminal/payments#create
 post '/create_payment_intent' do
@@ -119,6 +138,7 @@ post '/create_payment_intent' do
       :amount => params[:amount],
       :currency => params[:currency] || 'usd',
       :description => params[:description] || 'Example PaymentIntent',
+      :customer => params[:customer],
     )
   rescue Stripe::StripeError => e
     status 402
@@ -131,7 +151,6 @@ post '/create_payment_intent' do
 end
 
 # This endpoint get PaymentIntent List.
-# https://stripe.com/docs/terminal/payments#capture
 get '/get_pending_payment_intent_list' do
   begin
     result = Stripe::PaymentIntent.list()
@@ -243,7 +262,7 @@ post '/attach_payment_method_to_customer' do
     payment_method = Stripe::PaymentMethod.attach(
       params[:payment_method_id],
       {
-        customer: customer.id,
+        customer: params[:customer_id] || customer.id,
         expand: ["customer"],
     })
   rescue Stripe::StripeError => e
