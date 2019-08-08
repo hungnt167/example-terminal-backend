@@ -279,3 +279,19 @@ post '/attach_payment_method_to_customer' do
   # https://stripe.com/docs/upgrades#what-changes-does-stripe-consider-to-be-backwards-compatible
   return payment_method.to_json
 end
+
+# This endpoint create a new Customer.
+# https://stripe.com/docs/api/customers/create
+post '/create_customer' do
+  begin
+    customer = Stripe::Customer.create(email: params[:email])
+  rescue Stripe::StripeError => e
+    status 402
+    return log_info("Error creating new Customer! #{e.message}")
+  end
+
+  log_info("Created new Customer: #{customer.id}")
+
+  status 200
+  return customer.to_json
+end
